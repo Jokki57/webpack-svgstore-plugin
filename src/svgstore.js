@@ -18,6 +18,7 @@ const path = require('path');
 const utils = require('./helpers/utils');
 const ConstDependency = require('webpack/lib/dependencies/ConstDependency');
 const NullFactory = require('webpack/lib/NullFactory');
+const { ConcatSource } = require('webpack-sources');
 const async = require('async');
 
 class WebpackSvgStore {
@@ -32,7 +33,8 @@ class WebpackSvgStore {
   constructor(options) {
     this.tasks = {};
     this.options = _.merge({}, defaults, options);
-  };
+    this.injectMode = _.get(options, 'injectMode') === true;
+  }
 
   addTask(file, value) {
     this.tasks[file] ? this.tasks[file].push(value) : (() => {
@@ -106,6 +108,15 @@ class WebpackSvgStore {
                 const fileContent = utils.createSprite(
                   utils.parseFiles(files, this.options), this.options.template);
 
+
+                if (this.injectMode) {
+                  const output = _.get(compilation, 'options.output.filename');
+                  if (output && compilation.assets[output]) {
+                    const injectCode = (svg) => `(function(){var d=document.createElement('div');d.innerHTML='${svg}';document.head.appendChild(d);})()`;
+
+                    compilation.assets[output] = new ConcatSource(compilation.assets[output], injectCode(fileContent));
+                  }
+                } else {
                 // add sprite to assets
                 compilation.assets[task.fileName] = {
                   size: function () {
@@ -115,6 +126,7 @@ class WebpackSvgStore {
                     return new Buffer(fileContent);
                   }
                 };
+                }
                 // done
                 callback();
               });
